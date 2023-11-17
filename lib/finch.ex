@@ -417,6 +417,7 @@ defmodule Finch do
 
   defp __stream__(%Request{} = req, name, acc, fun, opts) do
     {pool, pool_mod} = get_pool(req, name)
+    opts = Keyword.merge([pool_name: name], opts)
     pool_mod.request(pool, req, acc, fun, opts)
   end
 
@@ -550,6 +551,7 @@ defmodule Finch do
   @spec async_request(Request.t(), name(), request_opts()) :: request_ref()
   def async_request(%Request{} = req, name, opts \\ []) do
     {pool, pool_mod} = get_pool(req, name)
+    opts = Keyword.merge([pool_name: name], opts)
     pool_mod.async_request(pool, req, opts)
   end
 

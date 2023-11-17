@@ -30,8 +30,9 @@ defmodule Finch.HTTP1.Pool do
     pool_timeout = Keyword.get(opts, :pool_timeout, 5_000)
     receive_timeout = Keyword.get(opts, :receive_timeout, 15_000)
     request_timeout = Keyword.get(opts, :request_timeout, :infinity)
+    pool_name = Keyword.get(opts, :pool_name)
 
-    metadata = %{request: req, pool: pool}
+    metadata = %{request: req, pool: pool, pool_name: pool_name}
 
     start_time = Telemetry.start(:queue, metadata)
 

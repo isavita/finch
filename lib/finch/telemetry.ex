@@ -64,6 +64,7 @@ defmodule Finch.Telemetry do
   #### Metadata
 
     * `:pool` - The pool's PID.
+    * `:pool_name` - The pool's name.
     * `:request` - The request (`Finch.Request`).
 
   ### Queue Stop
@@ -78,6 +79,7 @@ defmodule Finch.Telemetry do
   #### Metadata
 
     * `:pool` - The pool's PID.
+    * `:pool_name` - The pool's name.
     * `:request` - The request (`Finch.Request`).
 
   ### Queue Exception

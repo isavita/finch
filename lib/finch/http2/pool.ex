@@ -501,7 +501,10 @@ defmodule Finch.HTTP2.Pool do
   end
 
   defp send_request(from, from_pid, request_ref, req, opts, data) do
-    telemetry_metadata = %{request: req}
+    telemetry_metadata = %{
+      request: req,
+      pool_name: Keyword.get(opts, :pool_name)
+    }
 
     request = %{
       stream: RequestStream.new(req.body),
