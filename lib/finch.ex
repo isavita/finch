@@ -104,6 +104,18 @@ defmodule Finch do
 
   @type scheme_host_port() :: {scheme(), host :: String.t(), port :: :inet.port_number()}
 
+  @typedoc """
+  Pool metrics returned by `get_pool_status/2` for a single pool.
+  """
+  @type pool_metrics() ::
+          [Finch.HTTP1.PoolMetrics.t()]
+          | [Finch.HTTP2.PoolMetrics.t()]
+
+  @typedoc """
+  Pool metrics grouped by SHP when querying the `:default` configuration.
+  """
+  @type default_pool_metrics() :: %{required(scheme_host_port()) => pool_metrics()}
+
   @type request_opt() ::
           {:pool_timeout, timeout()}
           | {:receive_timeout, timeout()}
@@ -610,16 +622,22 @@ defmodule Finch do
   Get pool metrics list.
 
   The number of items present on the metrics list depends on the `:count` option
-  each metric will have a `pool_index` going from 1 to `:count`.
+  and each metric will have a `pool_index` going from 1 to `:count`.
 
-  The metrics struct depends on the pool scheme defined on the `:protocols` option
+  The metrics struct depends on the pool scheme defined on the `:protocols` option:
   `Finch.HTTP1.PoolMetrics` for `:http1` and `Finch.HTTP2.PoolMetrics` for `:http2`.
+  See the documentation for those modules for more details.
 
-  See the `Finch.HTTP1.PoolMetrics` and `Finch.HTTP2.PoolMetrics` for more details.
+  Passing `:default` returns a map keyed by `{scheme, host, port}` for every pool
+  started from the `:default` configuration with metrics enabled when that
+  configuration has `start_pool_metrics?` set to true.
 
-  `{:error, :not_found}` may return on 2 scenarios:
-    - There is no pool registered for the given pair finch instance and url
-    - The pool is configured with `start_pool_metrics?` option false (default)
+  `{:error, :not_found}` may return on these scenarios:
+    - There is no pool registered for the given pair Finch instance and URL.
+    - The pool is configured with `start_pool_metrics?` option false (default).
+    - The `:default` configuration has `start_pool_metrics?` set to false.
+    - `:default` is provided but no pools have been started from the `:default`
+      configuration (or none have metrics enabled).
 
   ## Example
 
@@ -636,16 +654,35 @@ defmodule Finch do
           pool_size: 50,
           available_connections: 37,
           in_use_connections: 13
-        }]
-      }
+        }
+      ]}
   """
-  @spec get_pool_status(name(), url :: String.t() | scheme_host_port()) ::
-          {:ok, list(Finch.HTTP1.PoolMetrics.t())}
-          | {:ok, list(Finch.HTTP2.PoolMetrics.t())}
+  @spec get_pool_status(name(), url :: String.t() | scheme_host_port() | :default) ::
+          {:ok, pool_metrics()}
+          | {:ok, default_pool_metrics()}
           | {:error, :not_found}
   def get_pool_status(finch_name, url) when is_binary(url) do
     {s, h, p, _, _} = Request.parse_url(url)
     get_pool_status(finch_name, {s, h, p})
+  end
+
+  def get_pool_status(finch_name, :default) do
+    if PoolManager.default_metrics_enabled?(finch_name) do
+      finch_name
+      |> PoolManager.get_default_shps()
+      |> Enum.reduce(%{}, fn shp, acc ->
+        case get_pool_status(finch_name, shp) do
+          {:ok, metrics} -> Map.put(acc, shp, metrics)
+          {:error, :not_found} -> acc
+        end
+      end)
+      |> case do
+        result when result == %{} -> {:error, :not_found}
+        result -> {:ok, result}
+      end
+    else
+      {:error, :not_found}
+    end
   end
 
   def get_pool_status(finch_name, shp) when is_tuple(shp) do
@@ -687,6 +724,9 @@ defmodule Finch do
             DynamicSupervisor.terminate_child(pool_supervisor_name(finch_name), pid)
           end
         )
+
+        PoolManager.maybe_remove_default_shp(finch_name, shp)
+        :ok
     end
   end
 end
