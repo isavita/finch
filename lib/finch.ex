@@ -629,11 +629,13 @@ defmodule Finch do
   See the documentation for those modules for more details.
 
   Passing `:default` returns a map keyed by `{scheme, host, port}` for every pool
-  started from the `:default` configuration with metrics enabled.
+  started from the `:default` configuration with metrics enabled when that
+  configuration has `start_pool_metrics?` set to true.
 
   `{:error, :not_found}` may return on these scenarios:
     - There is no pool registered for the given pair Finch instance and URL.
     - The pool is configured with `start_pool_metrics?` option false (default).
+    - The `:default` configuration has `start_pool_metrics?` set to false.
     - `:default` is provided but no pools have been started from the `:default`
       configuration (or none have metrics enabled).
 
@@ -665,17 +667,21 @@ defmodule Finch do
   end
 
   def get_pool_status(finch_name, :default) do
-    finch_name
-    |> PoolManager.get_default_shps()
-    |> Enum.reduce(%{}, fn shp, acc ->
-      case get_pool_status(finch_name, shp) do
-        {:ok, metrics} -> Map.put(acc, shp, metrics)
-        {:error, :not_found} -> acc
+    if PoolManager.default_metrics_enabled?(finch_name) do
+      finch_name
+      |> PoolManager.get_default_shps()
+      |> Enum.reduce(%{}, fn shp, acc ->
+        case get_pool_status(finch_name, shp) do
+          {:ok, metrics} -> Map.put(acc, shp, metrics)
+          {:error, :not_found} -> acc
+        end
+      end)
+      |> case do
+        result when result == %{} -> {:error, :not_found}
+        result -> {:ok, result}
       end
-    end)
-    |> case do
-      result when result == %{} -> {:error, :not_found}
-      result -> {:ok, result}
+    else
+      {:error, :not_found}
     end
   end
 

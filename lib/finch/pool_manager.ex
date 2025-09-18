@@ -90,7 +90,7 @@ defmodule Finch.PoolManager do
   defp do_start_pools(shp, config) do
     pool_config = pool_config(config, shp)
 
-    maybe_track_default_shp(config, shp)
+    maybe_track_default_shp(config, shp, pool_config.start_pool_metrics?)
 
     if pool_config.start_pool_metrics? do
       put_pool_count(config, shp, pool_config.count)
@@ -119,6 +119,16 @@ defmodule Finch.PoolManager do
     |> MapSet.to_list()
   end
 
+  def default_metrics_enabled?(finch_name) do
+    case Registry.meta(finch_name, :config) do
+      {:ok, %{default_pool_config: default_config}} ->
+        Map.get(default_config || %{}, :start_pool_metrics?, false)
+
+      :error ->
+        false
+    end
+  end
+
   def maybe_remove_default_shp(finch_name, shp) do
     case Registry.meta(finch_name, :config) do
       {:ok, %{manager_name: manager_name}} ->
@@ -133,13 +143,15 @@ defmodule Finch.PoolManager do
     :persistent_term.put(default_shps_key(name), MapSet.new())
   end
 
-  defp maybe_track_default_shp(%{pools: pools, registry_name: name}, shp) do
+  defp maybe_track_default_shp(%{pools: pools, registry_name: name}, shp, true) do
     if Map.has_key?(pools, shp) do
       :ok
     else
       update_default_shps(name, &MapSet.put(&1, shp))
     end
   end
+
+  defp maybe_track_default_shp(_config, _shp, false), do: :ok
 
   defp update_default_shps(name, fun) do
     key = default_shps_key(name)
